@@ -1,0 +1,5 @@
+﻿name,from,to,protocol,port_min,port_max,action,description
+no-ftp,*,*,TCP,20,21,deny,Forbid ftp into/from any pod
+no-telnet,*,*,TCP,23,23,deny,Forbid telnet into/from any pod
+no-smtp,*,*,TCP,25,25,deny,Forbid smtp into/from any pod
+no-imap,*,*,TCP,143,143,deny,Forbid imap into/from any pod

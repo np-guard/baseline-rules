@@ -1,0 +1,2 @@
+﻿name,from,to,protocol,port_min,port_max,action,description
+require-label-to-access-payments-service,"usesPayments notin (true, True), stage!=dev",app=paymentservice,*,1,65535,deny,Deny access to payment service if deployment does not have the usesPayments label set to true
