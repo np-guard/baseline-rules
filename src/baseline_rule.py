@@ -7,6 +7,10 @@
 A module for storing and querying baseline rules
 """
 from enum import Enum
+import json
+import base64
+from urllib import request
+from urllib.error import HTTPError
 import yaml
 from selector import Selector, SelectorOp, IpSelector
 
@@ -164,5 +168,23 @@ class BaselineRules(list):
     def __init__(self, baseline_files):
         super().__init__()
         for baseline_file in baseline_files or []:
+            if baseline_file.startswith('https://github.com/'):
+                baseline_file = self._get_github_file_content(baseline_file)
+                if baseline_file is None:
+                    continue
+
             for rule_record in yaml.load(baseline_file, Loader=yaml.SafeLoader):
                 self.append(BaselineRule(rule_record))
+
+    @staticmethod
+    def _get_github_file_content(url):
+        api_url = url.replace('github.com', 'api.github.com/repos', 1)
+        api_url = api_url.replace('blob/master', 'contents', 1)
+        req = request.Request(api_url)
+        try:
+            with request.urlopen(req) as response:
+                data = json.loads(response.read())
+                return base64.b64decode(data['content'])
+        except HTTPError as http_err:
+            print(f'Error fetching {api_url}. Status code: {http_err.code}')
+            return None
