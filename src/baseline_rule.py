@@ -169,12 +169,24 @@ class BaselineRules(list):
         super().__init__()
         for baseline_file in baseline_files or []:
             if baseline_file.startswith('https://github.com/'):
-                baseline_file = self._get_github_file_content(baseline_file)
-                if baseline_file is None:
-                    continue
+                file_content = self._get_github_file_content(baseline_file)
+            else:
+                file_content = self._get_fs_file_content(baseline_file)
 
-            for rule_record in yaml.load(baseline_file, Loader=yaml.SafeLoader):
+            if file_content is None:
+                continue
+
+            for rule_record in yaml.load(file_content, Loader=yaml.SafeLoader):
                 self.append(BaselineRule(rule_record))
+
+    @staticmethod
+    def _get_fs_file_content(file_name):
+        try:
+            with open(file_name) as file_content:
+                return file_content.read()
+        except OSError as ose:
+            print(f'Error reading file {file_name}: {ose}')
+            return None
 
     @staticmethod
     def _get_github_file_content(url):
