@@ -5,7 +5,7 @@ from baseline_rule import BaselineRules
 
 class TestGitHubURLs(unittest.TestCase):
     def test_allow_https_rule_from_github(self):
-        good_url = 'https://github.com/shift-left-netconfig/baseline-rules/blob/master/examples/allow_https_egress.yaml'
+        good_url = 'https://github.com/np-guard/baseline-rules/blob/master/examples/allow_https_egress.yaml'
         blr = BaselineRules([good_url])
         self.assertEqual(blr[0].port_min, 443)
 
