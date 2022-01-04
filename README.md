@@ -12,4 +12,4 @@ A baseline-rule file is a YAML file containing a list of Rule objects, and each 
 |port_min   |Minimal connections port|int|`null` (no minimal port)|
 |port_max   |Maximal connections port|int|`null` (no maximal port)|
 
-Examples are available in the [examples directory](https://github.com/shift-left-netconfig/baseline-rules/tree/master/examples).
+Examples are available in the [examples directory](https://github.com/np-guard/baseline-rules/tree/master/examples).
