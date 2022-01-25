@@ -2,7 +2,7 @@ import unittest
 from os import path
 import sys
 
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), 'src'))
+sys.path.append(path.join(path.dirname(path.dirname(path.realpath(__file__))), 'src'))
 from baseline_rule import BaselineRules
 
 
