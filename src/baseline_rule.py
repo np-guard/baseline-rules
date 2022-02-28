@@ -88,7 +88,7 @@ class BaselineRule:
         return BaselineRule._matches_selectors(labels, self.target)
 
     @staticmethod
-    def _selectors_as_netpol_peer(selectors):
+    def selectors_as_netpol_peer(selectors):
         if not selectors:
             return {}
         if isinstance(selectors, IpSelector):
@@ -104,14 +104,14 @@ class BaselineRule:
         :return: the source field as a k8s NetworkPolicyPeer record
         :rtype: dict
         """
-        return self._selectors_as_netpol_peer(self.source)
+        return self.selectors_as_netpol_peer(self.source)
 
     def targets_as_netpol_peer(self):
         """
         :return: the target field as a k8s NetworkPolicyPeer record
         :rtype: dict
         """
-        return self._selectors_as_netpol_peer(self.target)
+        return self.selectors_as_netpol_peer(self.target)
 
     def get_port_array(self):
         """
@@ -135,20 +135,20 @@ class BaselineRule:
         """
         is_ingress_policy = not isinstance(self.target, IpSelector)
         policy_type = 'Ingress' if is_ingress_policy else 'Egress'
-        policy_selector = self._selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or \
-            {'podSelector': {}}
+        policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or \
+                          {'podSelector': {}}
         policy_spec = {
             'policyTypes': [policy_type]
         }
         policy_spec.update(policy_selector)
         rule_to_add = {'ports': self.get_port_array()}
         if is_ingress_policy:
-            from_selector = self._selectors_as_netpol_peer(self.source)
+            from_selector = self.selectors_as_netpol_peer(self.source)
             if from_selector:
                 rule_to_add.update({'from': [from_selector]})
             policy_spec['ingress'] = [rule_to_add]
         else:
-            to_selector = self._selectors_as_netpol_peer(self.target)
+            to_selector = self.selectors_as_netpol_peer(self.target)
             if to_selector:
                 rule_to_add.update({'to': [to_selector]})
             policy_spec['egress'] = [rule_to_add]
