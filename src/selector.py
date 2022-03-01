@@ -133,7 +133,7 @@ class LabelSelector(Selector):
         not_equal_pos = selector.find('!=')
         if not_equal_pos != -1:
             return LabelSelector(selector[:not_equal_pos].strip(), SelectorOp.NOT_IN,
-                                 [selector[not_equal_pos+2:].strip()])
+                                 [selector[not_equal_pos + 2:].strip()])
 
         equal_pos = selector.find('=')
         if equal_pos != -1:
