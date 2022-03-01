@@ -136,7 +136,7 @@ class BaselineRule:
         is_ingress_policy = not isinstance(self.target, IpSelector)
         policy_type = 'Ingress' if is_ingress_policy else 'Egress'
         policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or \
-                          {'podSelector': {}}
+            {'podSelector': {}}
         policy_spec = {
             'policyTypes': [policy_type]
         }
