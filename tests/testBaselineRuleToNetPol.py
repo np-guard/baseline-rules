@@ -195,3 +195,7 @@ class TestBaselineRulesToNetPols(unittest.TestCase):
                 expected_netpol = rules_dict[rule_file_name][rule_index]
                 actual_netpol = get_actual_netpol_from_rule(rule)
                 self.assertTrue(compare_strings(expected_netpol, actual_netpol))
+
+
+if __name__ == '__main__':
+    unittest.main()

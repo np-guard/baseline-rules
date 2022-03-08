@@ -287,3 +287,7 @@ class TestBaselineRulesToGlobalNetPols(unittest.TestCase):
                 p1, p2 = get_actual_netpol_from_rule(rule)
                 self.assertTrue(compare_strings(expected_p1, p1))
                 self.assertTrue(compare_strings(expected_p2, p2))
+
+if __name__ == '__main__':
+    unittest.main()
+
