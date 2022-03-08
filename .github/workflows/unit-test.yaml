@@ -26,3 +26,7 @@ jobs:
       run: flake8 src --count --max-complexity=10 --max-line-length=127 --statistics --ignore E402
     - name: Run unit test
       run: python tests/testBaselineRules.py
+    - name: Run unit test of BaselineRuleToNetPol
+      run: python tests/testBaselineRuleToNetPol.py
+    - name: Run unit test of BaselineRuleToGlobalNetPol
+      run: python tests/testBaselineRuleToGlobalNetPol.py
