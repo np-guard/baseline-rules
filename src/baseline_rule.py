@@ -27,6 +27,7 @@ class BaselineRule:
     """
     This class holds all relevant information about a baseline rule and provides several methods to query it
     """
+
     def __init__(self, rule_record):
         self.name = rule_record.get('name', '<no name>')
         print(f'processing rule {self.name}')
@@ -99,6 +100,22 @@ class BaselineRule:
             sel = {'matchExpressions': [selector.convert_to_label_selector_requirement() for selector in selectors]}
         return {'podSelector': sel}
 
+    @staticmethod
+    def _selectors_as_netpol_peer_calico(selectors, limit_to_all_expr=True):
+        """
+        :param Union(list[LabelSelector], IpSelector) selectors: the source or target selectors
+        :param bool limit_to_all_expr: should limit calico selector to 'all()' in case of empty input selectors
+        :return: calico selector dict
+        :rtype dict
+        """
+        if not selectors:
+            return {'selector': 'all()'} if limit_to_all_expr else {}
+        if isinstance(selectors, IpSelector):
+            return {'nets': selectors.get_nets_calico()}
+
+        expr = ' && '.join(selector.convert_to_calico_selector_expression() for selector in selectors)
+        return {'selector': expr}
+
     def sources_as_netpol_peer(self):
         """
         :return: the source field as a k8s NetworkPolicyPeer record
@@ -118,25 +135,117 @@ class BaselineRule:
         :return: the port range specified in the baseline rule as a list of k8s port records
         :rtype: list
         """
+        port_rec = {'protocol': self.protocol} if self.protocol else {}
+        if not self.port_min:
+            return [] if not self.protocol else [port_rec]
+        if self.port_min == self.port_max:
+            port_rec['port'] = self.port_min
+        elif self.port_min < self.port_max:
+            port_rec['port'] = self.port_min
+            port_rec['endPort'] = self.port_max
+        return [port_rec]
+
+    def get_port_array_calico(self):
+        """
+        :return: the port range specified in the baseline rule as a list of calico ports
+        :rtype: list
+        """
         if not self.port_min:
             return []
         ports_array = []
-        for port in range(self.port_min, self.port_max + 1):
-            port_rec = {'protocol': self.protocol} if self.protocol else {}
-            port_rec['port'] = port
-            ports_array.append(port_rec)
-
+        if self.port_min == self.port_max:
+            ports_array = [self.port_min]
+        elif self.port_min < self.port_max:
+            ports_array = [f'{self.port_min}:{self.port_max}']
         return ports_array
 
+    def _get_calico_policy_spec_second_direction(self, is_ingress):
+        policy_spec = {'types': ['Ingress']} if is_ingress else {'types': ['Egress']}
+        if is_ingress:
+            policy_selector = self._selectors_as_netpol_peer_calico(self.target)
+            rule_dict = {'action': 'Allow',
+                         'source': self._selectors_as_netpol_peer_calico(self.source)}
+        else:
+            policy_selector = self._selectors_as_netpol_peer_calico(self.source)
+            rule_dict = {'action': 'Allow',
+                         'destination': self._selectors_as_netpol_peer_calico(self.target)}
+
+        policy_spec.update(policy_selector)
+        rule_type = 'ingress' if is_ingress else 'egress'
+        policy_spec.update({rule_type: [rule_dict]})
+        return policy_spec
+
+    def _get_policy_type(self):
+        """
+        :return: a tuple of (1) is_ingress bool flag (2) str of policy type (Ingress/Egress)
+        :rtype (bool, str)
+        """
+        is_ingress = not isinstance(self.target, IpSelector)
+        return is_ingress, 'Ingress' if is_ingress else 'Egress'
+
+    @staticmethod
+    def _get_calico_policy_dict(policy_spec, policy_name):
+        return {
+            'apiVersion': 'projectcalico.org/v3',
+            'kind': 'GlobalNetworkPolicy',
+            'metadata': {'name': policy_name},
+            'spec': policy_spec
+        }
+
+    def to_global_netpol_calico(self):
+        """
+        Create Calico GlobalNetworkPolicy resources representing the connections specified by the rule.
+        Relevant for baseline rules with no namespace, thus using GlobalNetworkPolicy which applies to all namespaces.
+        Note that two GlobalNetworkPolicy resources may be required for allowing both directions of a connection.
+
+        :return: One or two Calico GlobalNetworkPolicy resources representing the connections specified by the rule
+        :rtype: list[dict]
+        """
+        is_ingress_policy, policy_type = self._get_policy_type()
+        policy_spec = {'types': [policy_type]}
+        policy_selector = self._selectors_as_netpol_peer_calico(self.target if is_ingress_policy else self.source)
+
+        policy_spec.update(policy_selector)
+        ports_list = self.get_port_array_calico()
+        ports_dict = {'ports': ports_list}
+
+        rule_to_add = {'action': 'Allow'}
+        if self.protocol:
+            rule_to_add['protocol'] = self.protocol
+        if is_ingress_policy:
+            src_dict = self._selectors_as_netpol_peer_calico(self.source, False)
+            rule_to_add['source'] = src_dict
+            if ports_list:
+                rule_to_add['destination'] = ports_dict
+            policy_spec['ingress'] = [rule_to_add]
+        else:
+            dst_dict = self._selectors_as_netpol_peer_calico(self.target, False)
+            if ports_list:
+                dst_dict.update(ports_dict)
+            rule_to_add['destination'] = dst_dict
+            policy_spec['egress'] = [rule_to_add]
+
+        first_policy = self._get_calico_policy_dict(policy_spec, self.name)
+        policies_list = [first_policy]
+        if (is_ingress_policy and isinstance(self.source, IpSelector)) or (
+                not is_ingress_policy and isinstance(self.target, IpSelector)):
+            return policies_list
+
+        second_policy_spec = self._get_calico_policy_spec_second_direction(not is_ingress_policy)
+        second_policy = self._get_calico_policy_dict(second_policy_spec, f'{self.name}-second-direction')
+        policies_list.append(second_policy)
+        return policies_list
+
+    # TODO: currently generates policy in default namespace, should be used for baseline rules with namespaces
     def to_netpol(self):
         """
         :return: A k8s NetworkPolicy resource representing the connections specified by the rule
         :rtype: dict
         """
-        is_ingress_policy = not isinstance(self.target, IpSelector)
-        policy_type = 'Ingress' if is_ingress_policy else 'Egress'
-        policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or \
-            {'podSelector': {}}
+        is_ingress_policy, policy_type = self._get_policy_type()
+        policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or {
+            'podSelector': {}}
+
         policy_spec = {
             'policyTypes': [policy_type]
         }
@@ -165,6 +274,7 @@ class BaselineRules(list):
     """
     Simply a collection of BaselineRule objects
     """
+
     def __init__(self, baseline_files):
         super().__init__()
         for baseline_file in baseline_files or []:

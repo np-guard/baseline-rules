@@ -16,6 +16,7 @@ class Selector:
     """
     A base class for Selectors (either ip-based or label-based)
     """
+
     @staticmethod
     def parse_selectors(selectors_str):
         """
@@ -44,6 +45,7 @@ class IpSelector(Selector):
     """
     A class representing an ipBlock selector
     """
+
     def __init__(self, ipn):
         self.ipn = ipn
 
@@ -53,6 +55,13 @@ class IpSelector(Selector):
         :rtype: dict
         """
         return {'cidr': str(self.ipn)}
+
+    def get_nets_calico(self):
+        """
+        :return: The ip range as Calico nets
+        :rtype: list
+        """
+        return [str(self.ipn)]
 
 
 class SelectorOp(Enum):
@@ -70,6 +79,7 @@ class LabelSelector(Selector):
     A class representing a single label selector as described here:
     https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#set-based-requirement
     """
+
     def __init__(self, key, op, values):
         """
         :param str key: Label key
@@ -105,6 +115,28 @@ class LabelSelector(Selector):
         op_to_str = {SelectorOp.IN: 'In', SelectorOp.NOT_IN: 'NotIn', SelectorOp.EXISTS: 'Exists',
                      SelectorOp.DOES_NOT_EXIST: 'DoesNotExist'}
         return {'key': self.key, 'operator': op_to_str[self.operator], 'values': self.values}
+
+    def convert_to_calico_selector_expression(self):
+        """
+        conversion of k8s Set-based requirement to Calico selector expression:
+        https://projectcalico.docs.tigera.io/reference/resources/globalnetworkpolicy#selectors
+        Examples for relevant Calico selector exprs:
+        k in { 'v1', 'v2' } , k not in { 'v1', 'v2' } , k == 'v' , k != 'v' , has(k) , !has(k)
+        Examples for relevant k8s Set-based requirement expr:
+        environment in (production, qa) , tier notin (frontend, backend) , partition , !partition , environment!=qa,
+        environment=production
+        :return: the Selector expr by Calico syntax
+        :rtype str
+        """
+        if self.operator == SelectorOp.EXISTS:
+            return f'has({self.key})'
+        elif self.operator == SelectorOp.DOES_NOT_EXIST:
+            return f'!has({self.key})'
+        values_expr = '{' + ', '.join(f'\'{x}\'' for x in self.values) + '}'
+        if self.operator == SelectorOp.IN:
+            return f'{self.key} in {values_expr}'
+        # here self.operator == SelectorOp.NOT_IN:
+        return f'{self.key} not in {values_expr}'
 
     @staticmethod
     def _parse_value_list(value_list):

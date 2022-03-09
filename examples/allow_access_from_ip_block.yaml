@@ -1,0 +1,5 @@
+- name: allow-access-from-ip-block
+  description: Allow access from ip block
+  from: 172.217.0.0/16
+  to: app=adservice
+  action: allow
