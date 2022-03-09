@@ -108,8 +108,7 @@ spec:
   - ports:
     - protocol: TCP
       port: 20
-    - protocol: TCP
-      port: 21
+      endPort: 21
 """
 
 expected_netpol_ciso_denied_ports_no_telnet = """\

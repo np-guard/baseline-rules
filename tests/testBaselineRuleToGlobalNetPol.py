@@ -120,8 +120,7 @@ spec:
     source: {}
     destination:
       ports:
-      - 20
-      - 21
+      - '20:21'
 """
 
 expected_netpol_ciso_denied_ports_no_ftp_2 = """\

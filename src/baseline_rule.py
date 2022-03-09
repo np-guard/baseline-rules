@@ -138,21 +138,28 @@ class BaselineRule:
         if not self.port_min:
             return []
         ports_array = []
-        for port in range(self.port_min, self.port_max + 1):
-            port_rec = {'protocol': self.protocol} if self.protocol else {}
-            port_rec['port'] = port
-            ports_array.append(port_rec)
-
+        port_rec = {'protocol': self.protocol} if self.protocol else {}
+        if self.port_min == self.port_max:
+            port_rec['port'] = self.port_min
+        elif self.port_min < self.port_max:
+            port_rec['port'] = self.port_min
+            port_rec['endPort'] = self.port_max
+        ports_array.append(port_rec)
         return ports_array
 
     def get_port_array_calico(self):
+        """
+        :return: the port range specified in the baseline rule as a list of calico ports
+        :rtype: list
+        """
         if not self.port_min:
-            return [], self.protocol
+            return []
         ports_array = []
-        for port in range(self.port_min, self.port_max + 1):
-            ports_array.append(port)
-
-        return ports_array, self.protocol
+        if self.port_min == self.port_max:
+            ports_array = [self.port_min]
+        elif self.port_min < self.port_max:
+            ports_array = [f'{self.port_min}:{self.port_max}']
+        return ports_array
 
     def _get_calico_policy_spec_second_direction(self, is_ingress):
         policy_spec = {'types': ['Ingress']} if is_ingress else {'types': ['Egress']}
@@ -193,32 +200,31 @@ class BaselineRule:
         Relevant for baseline rules with no namespace, thus using GlobalNetworkPolicy which applies to all namespaces.
         Note that two GlobalNetworkPolicy resources may be required for allowing both directions of a connection.
 
-        :return: A Calico GlobalNetworkPolicy resources representing the connections specified by the rule
+        :return: One or two Calico GlobalNetworkPolicy resources representing the connections specified by the rule
         :rtype: (dict, union[dict, None])
         """
         is_ingress_policy, policy_type = self._get_policy_type()
-        policy_spec = dict()
-        policy_spec.update({'types': [policy_type]})
+        policy_spec = {'types': [policy_type]}
         policy_selector = self._selectors_as_netpol_peer_calico(self.target if is_ingress_policy else self.source)
 
         policy_spec.update(policy_selector)
-        ports_list, protocol = self.get_port_array_calico()
+        ports_list = self.get_port_array_calico()
         ports_dict = {'ports': ports_list}
 
         rule_to_add = {'action': 'Allow'}
-        if protocol:
-            rule_to_add.update({'protocol': protocol})
+        if self.protocol:
+            rule_to_add['protocol'] = self.protocol
         if is_ingress_policy:
             src_dict = self._selectors_as_netpol_peer_calico(self.source, False)
-            rule_to_add.update({'source': src_dict})
+            rule_to_add['source'] = src_dict
             if ports_list:
-                rule_to_add.update({'destination': ports_dict})
+                rule_to_add['destination'] = ports_dict
             policy_spec['ingress'] = [rule_to_add]
         else:
             dst_dict = self._selectors_as_netpol_peer_calico(self.target, False)
             if ports_list:
                 dst_dict.update(ports_dict)
-            rule_to_add.update({'destination': dst_dict})
+            rule_to_add['destination'] = dst_dict
             policy_spec['egress'] = [rule_to_add]
 
         first_policy = self._get_calico_policy_dict(policy_spec, self.name)
