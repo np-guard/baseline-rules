@@ -113,7 +113,7 @@ class BaselineRule:
         if isinstance(selectors, IpSelector):
             return {'nets': selectors.get_nets_calico()}
 
-        expr = ' && '.join(selector.calico_selector_expr for selector in selectors)
+        expr = ' && '.join(selector.convert_to_calico_selector_expression() for selector in selectors)
         return {'selector': expr}
 
     def sources_as_netpol_peer(self):

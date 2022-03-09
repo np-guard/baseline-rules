@@ -80,17 +80,15 @@ class LabelSelector(Selector):
     https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#set-based-requirement
     """
 
-    def __init__(self, key, op, values, calico_selector_expr):
+    def __init__(self, key, op, values):
         """
         :param str key: Label key
         :param SelectorOp op: The selector operator
         :param list values: A list of label values
-        :param str calico_selector_expr: the Selector expr by Calico syntax
         """
         self.key = key
         self.operator = op
         self.values = values
-        self.calico_selector_expr = calico_selector_expr
 
     def matches(self, labels):
         """
@@ -118,6 +116,28 @@ class LabelSelector(Selector):
                      SelectorOp.DOES_NOT_EXIST: 'DoesNotExist'}
         return {'key': self.key, 'operator': op_to_str[self.operator], 'values': self.values}
 
+    def convert_to_calico_selector_expression(self):
+        """
+        conversion of k8s Set-based requirement to Calico selector expression:
+        https://projectcalico.docs.tigera.io/reference/resources/globalnetworkpolicy#selectors
+        Examples for relevant Calico selector exprs:
+        k in { 'v1', 'v2' } , k not in { 'v1', 'v2' } , k == 'v' , k != 'v' , has(k) , !has(k)
+        Examples for relevant k8s Set-based requirement expr:
+        environment in (production, qa) , tier notin (frontend, backend) , partition , !partition , environment!=qa,
+        environment=production
+        :return: the Selector expr by Calico syntax
+        :rtype str
+        """
+        if self.operator == SelectorOp.EXISTS:
+            return f'has({self.key})'
+        elif self.operator == SelectorOp.DOES_NOT_EXIST:
+            return f'!has({self.key})'
+        values_expr = '{' + ', '.join(f'\'{x}\'' for x in self.values) + '}'
+        if self.operator == SelectorOp.IN:
+            return f'{self.key} in {values_expr}'
+        # here self.operator == SelectorOp.NOT_IN:
+        return f'{self.key} not in {values_expr}'
+
     @staticmethod
     def _parse_value_list(value_list):
         """
@@ -135,49 +155,30 @@ class LabelSelector(Selector):
         """
         Parse a single selector, as defined in
         https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#set-based-requirement
-
-        Add also conversion of k8s Set-based requirement to Calico selector expression:
-        https://projectcalico.docs.tigera.io/reference/resources/globalnetworkpolicy#selectors
-        Examples for relevant Calico selector exprs:
-        k in { 'v1', 'v2' } , k not in { 'v1', 'v2' } , k == 'v' , k != 'v' , has(k) , !has(k)
-        Examples for relevant k8s Set-based requirement expr:
-        environment in (production, qa) , tier notin (frontend, backend) , partition , !partition , environment!=qa,
-        environment=production
-
         :param str selector: a string with selector expression
         :return: An instance of the Selector class
         """
         selector = selector.strip()
         if selector.startswith('!'):
-            calico_selector_expr = f'!has({selector[1:]})'
-            return LabelSelector(selector[1:], SelectorOp.DOES_NOT_EXIST, [], calico_selector_expr)
+            return LabelSelector(selector[1:], SelectorOp.DOES_NOT_EXIST, [])
 
         not_equal_pos = selector.find('!=')
         if not_equal_pos != -1:
-            calico_selector_expr = f'{selector[:not_equal_pos].strip()} != \'{selector[not_equal_pos + 2:].strip()}\''
             return LabelSelector(selector[:not_equal_pos].strip(), SelectorOp.NOT_IN,
-                                 [selector[not_equal_pos + 2:].strip()], calico_selector_expr)
+                                 [selector[not_equal_pos + 2:].strip()])
 
         equal_pos = selector.find('=')
         if equal_pos != -1:
-            calico_selector_expr = f'{selector[:equal_pos].strip()} == \'{selector[equal_pos + 1:].strip()}\''
-
-            return LabelSelector(selector[:equal_pos].strip(), SelectorOp.IN, [selector[equal_pos + 1:].strip()],
-                                 calico_selector_expr)
+            return LabelSelector(selector[:equal_pos].strip(), SelectorOp.IN, [selector[equal_pos + 1:].strip()])
 
         not_in_pos = re.search(r'\s+notin\s+\(', selector)
         if not_in_pos:
             value_list = LabelSelector._parse_value_list(selector[not_in_pos.end() - 1:])
-            values_expr = '{' + ', '.join(f'\'{x}\'' for x in value_list) + '}'
-            calico_selector_expr = f'{selector[:not_in_pos.start()]} not in {values_expr}'
-            return LabelSelector(selector[:not_in_pos.start()], SelectorOp.NOT_IN, value_list, calico_selector_expr)
+            return LabelSelector(selector[:not_in_pos.start()], SelectorOp.NOT_IN, value_list)
 
         in_pos = re.search(r'\s+in\s+\(', selector)
         if in_pos:
             value_list = LabelSelector._parse_value_list(selector[in_pos.end() - 1:])
-            values_expr = '{' + ', '.join(f'\'{x}\'' for x in value_list) + '}'
-            calico_selector_expr = f'{selector[:in_pos.start()]} in {values_expr}'
-            return LabelSelector(selector[:in_pos.start()], SelectorOp.IN, value_list, calico_selector_expr)
+            return LabelSelector(selector[:in_pos.start()], SelectorOp.IN, value_list)
 
-        calico_selector_expr = f'has({selector[1:]})'
-        return LabelSelector(selector, SelectorOp.EXISTS, [], calico_selector_expr)
+        return LabelSelector(selector, SelectorOp.EXISTS, [])

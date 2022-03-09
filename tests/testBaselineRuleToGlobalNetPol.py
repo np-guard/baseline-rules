@@ -14,7 +14,7 @@ metadata:
 spec:
   types:
   - Egress
-  selector: app == 'adservice'
+  selector: app in {'adservice'}
   egress:
   - action: Allow
     destination:
@@ -30,7 +30,7 @@ metadata:
 spec:
   types:
   - Egress
-  selector: app == 'account-query-selector'
+  selector: app in {'account-query-selector'}
   egress:
   - action: Allow
     protocol: TCP
@@ -49,12 +49,12 @@ metadata:
 spec:
   types:
   - Ingress
-  selector: app != 'paymentservice'
+  selector: app not in {'paymentservice'}
   ingress:
   - action: Allow
     protocol: TCP
     source:
-      selector: app == 'loadgenerator'
+      selector: app in {'loadgenerator'}
     destination:
       ports:
       - 32000
@@ -68,11 +68,11 @@ metadata:
 spec:
   types:
   - Egress
-  selector: app == 'loadgenerator'
+  selector: app in {'loadgenerator'}
   egress:
   - action: Allow
     destination:
-      selector: app != 'paymentservice'
+      selector: app not in {'paymentservice'}
 """
 
 expected_netpol_restrict_access_to_payments_1 = """\
@@ -83,11 +83,11 @@ metadata:
 spec:
   types:
   - Ingress
-  selector: app == 'paymentservice'
+  selector: app in {'paymentservice'}
   ingress:
   - action: Allow
     source:
-      selector: usesPayments not in {'true', 'True'} && stage != 'dev'
+      selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
 """
 
 expected_netpol_restrict_access_to_payments_2 = """\
@@ -98,11 +98,11 @@ metadata:
 spec:
   types:
   - Egress
-  selector: usesPayments not in {'true', 'True'} && stage != 'dev'
+  selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
   egress:
   - action: Allow
     destination:
-      selector: app == 'paymentservice'
+      selector: app in {'paymentservice'}
 """
 
 expected_netpol_ciso_denied_ports_no_ftp_1 = """\
