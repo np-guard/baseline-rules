@@ -135,17 +135,15 @@ class BaselineRule:
         :return: the port range specified in the baseline rule as a list of k8s port records
         :rtype: list
         """
-        if not self.port_min:
-            return []
-        ports_array = []
         port_rec = {'protocol': self.protocol} if self.protocol else {}
+        if not self.port_min:
+            return [] if not self.protocol else [port_rec]
         if self.port_min == self.port_max:
             port_rec['port'] = self.port_min
         elif self.port_min < self.port_max:
             port_rec['port'] = self.port_min
             port_rec['endPort'] = self.port_max
-        ports_array.append(port_rec)
-        return ports_array
+        return [port_rec]
 
     def get_port_array_calico(self):
         """
@@ -201,7 +199,7 @@ class BaselineRule:
         Note that two GlobalNetworkPolicy resources may be required for allowing both directions of a connection.
 
         :return: One or two Calico GlobalNetworkPolicy resources representing the connections specified by the rule
-        :rtype: (dict, union[dict, None])
+        :rtype: list[dict]
         """
         is_ingress_policy, policy_type = self._get_policy_type()
         policy_spec = {'types': [policy_type]}
@@ -228,14 +226,15 @@ class BaselineRule:
             policy_spec['egress'] = [rule_to_add]
 
         first_policy = self._get_calico_policy_dict(policy_spec, self.name)
-
+        policies_list = [first_policy]
         if (is_ingress_policy and isinstance(self.source, IpSelector)) or (
                 not is_ingress_policy and isinstance(self.target, IpSelector)):
-            second_policy = None
-        else:
-            second_policy_spec = self._get_calico_policy_spec_second_direction(not is_ingress_policy)
-            second_policy = self._get_calico_policy_dict(second_policy_spec, f'{self.name}-second-direction')
-        return first_policy, second_policy
+            return policies_list
+
+        second_policy_spec = self._get_calico_policy_spec_second_direction(not is_ingress_policy)
+        second_policy = self._get_calico_policy_dict(second_policy_spec, f'{self.name}-second-direction')
+        policies_list.append(second_policy)
+        return policies_list
 
     # TODO: currently generates policy in default namespace, should be used for baseline rules with namespaces
     def to_netpol(self):

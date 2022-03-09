@@ -266,7 +266,9 @@ def get_rule_url(rule_name):
 
 
 def get_actual_netpol_from_rule(rule):
-    netpol1, netpol2 = rule.to_global_netpol_calico()
+    policies_list = rule.to_global_netpol_calico()
+    netpol1 = policies_list[0]
+    netpol2 = policies_list[1] if len(policies_list) == 2 else None
     netpol_str1 = yaml.dump(netpol1, None, default_flow_style=False, sort_keys=False)
     netpol_str2 = yaml.dump(netpol2, None, default_flow_style=False, sort_keys=False)
     # print(netpol_str1)
