@@ -301,7 +301,7 @@ class BaselineRules(list):
 
     @staticmethod
     def _get_github_file_content(url):
-        if url.startswith('https://raw.githubusercontent'):
+        if url.startswith('https://raw.githubusercontent.com'):
             return urlopen(url)
 
         api_url = url.replace('github.com', 'api.github.com/repos', 1)
