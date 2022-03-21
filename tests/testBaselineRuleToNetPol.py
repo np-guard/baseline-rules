@@ -175,7 +175,7 @@ def compare_strings(expected, actual):
 
 
 def get_rule_url(rule_name):
-    return f'https://github.com/np-guard/baseline-rules/blob/master/examples/{rule_name}.yaml'
+    return f'https://raw.githubusercontent.com/np-guard/baseline-rules/master/examples/{rule_name}.yaml'
 
 
 def get_actual_netpol_from_rule(rule):
