@@ -279,7 +279,7 @@ class BaselineRules(list):
     def __init__(self, baseline_files):
         super().__init__()
         for baseline_file in baseline_files or []:
-            if baseline_file.startswith(('https://github.com/', 'https://raw.githubusercontent')):
+            if baseline_file.startswith(('https://github.com/', 'https://raw.githubusercontent.com')):
                 file_content = self._get_github_file_content(baseline_file)
             else:
                 file_content = self._get_fs_file_content(baseline_file)
