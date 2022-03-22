@@ -10,7 +10,6 @@ from enum import Enum
 import json
 import base64
 from urllib import request
-from urllib.request import urlopen
 from urllib.error import HTTPError
 import yaml
 from selector import Selector, SelectorOp, IpSelector
@@ -275,12 +274,13 @@ class BaselineRules(list):
     """
     Simply a collection of BaselineRule objects
     """
+    api_github_prefix = 'https://github.com/'
     raw_github_prefix = 'https://raw.githubusercontent.com'
 
     def __init__(self, baseline_files):
         super().__init__()
         for baseline_file in baseline_files or []:
-            if baseline_file.startswith(('https://github.com/', BaselineRules.raw_github_prefix)):
+            if baseline_file.startswith((BaselineRules.api_github_prefix, BaselineRules.raw_github_prefix)):
                 file_content = self._get_github_file_content(baseline_file)
             else:
                 file_content = self._get_fs_file_content(baseline_file)
@@ -303,7 +303,7 @@ class BaselineRules(list):
     @staticmethod
     def _get_github_file_content(url):
         if url.startswith(BaselineRules.raw_github_prefix):
-            return urlopen(url)
+            return request.urlopen(url)
 
         api_url = url.replace('github.com', 'api.github.com/repos', 1)
         api_url = api_url.replace('blob/master', 'contents', 1)
