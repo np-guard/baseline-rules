@@ -94,7 +94,8 @@ class BaselineRule:
     def selectors_as_netpol_peer(selectors, ns_selector=False):
         if not selectors:
             if ns_selector:
-                return {'namespaceSelector': {}}  # undefined refers to all, in k8s, existing but empty namespaceSelector matches all namespaces
+                # undefined refers to all, in k8s, existing but empty namespaceSelector matches all namespaces
+                return {'namespaceSelector': {}}
             return {}
         if isinstance(selectors, IpSelector):
             if ns_selector:
