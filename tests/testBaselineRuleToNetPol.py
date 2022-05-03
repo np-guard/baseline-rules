@@ -11,6 +11,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-access-to-google
+  namespace: default
 spec:
   policyTypes:
   - Egress
@@ -29,6 +30,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-https
+  namespace: default
 spec:
   policyTypes:
   - Egress
@@ -49,6 +51,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: allow-load-generation
+  namespace: default
 spec:
   policyTypes:
   - Ingress
@@ -66,6 +69,9 @@ spec:
     - podSelector:
         matchLabels:
           app: loadgenerator
+      namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
 """
 
 expected_netpol_restrict_access_to_payments = """\
@@ -73,6 +79,7 @@ apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: require-label-to-access-payments-service
+  namespace: default
 spec:
   policyTypes:
   - Ingress
@@ -93,6 +100,7 @@ spec:
           operator: NotIn
           values:
           - dev
+      namespaceSelector: {}
 """
 
 expected_netpol_ciso_denied_ports_no_ftp = """\
@@ -157,13 +165,13 @@ spec:
 """
 
 rules_dict = dict()
-rules_dict['allow_access_to_google'] = [expected_netpol_allow_access_to_google]
-rules_dict['allow_https_egress'] = [expected_netpol_allow_https_egress]
-rules_dict['allow_load_generation'] = [expected_netpol_allow_load_generation]
-rules_dict['restrict_access_to_payment'] = [expected_netpol_restrict_access_to_payments]
-rules_dict['ciso_denied_ports'] = [expected_netpol_ciso_denied_ports_no_ftp,
-                                   expected_netpol_ciso_denied_ports_no_telnet,
-                                   expected_netpol_ciso_denied_ports_no_smtp, expected_netpol_ciso_denied_ports_no_imap]
+rules_dict['allow_access_to_google_namespaced'] = [expected_netpol_allow_access_to_google]
+rules_dict['allow_https_egress_namespaced'] = [expected_netpol_allow_https_egress]
+rules_dict['allow_load_generation_namespaced'] = [expected_netpol_allow_load_generation]
+rules_dict['restrict_access_to_payment_namespaced'] = [expected_netpol_restrict_access_to_payments]
+# rules_dict['ciso_denied_ports'] = [expected_netpol_ciso_denied_ports_no_ftp,
+#                                    expected_netpol_ciso_denied_ports_no_telnet,
+#                                    expected_netpol_ciso_denied_ports_no_smtp, expected_netpol_ciso_denied_ports_no_imap]
 
 
 def compare_strings(expected, actual):

@@ -1,0 +1,6 @@
+- name: allow-access-to-google
+  description: Allow connecting to Google
+  from: app=adservice
+  from_ns: kubernetes.io/metadata.name=default
+  to: 172.217.0.0/16
+  action: allow
