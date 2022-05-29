@@ -22,7 +22,7 @@ spec:
       - 172.217.0.0/16
 """
 
-expected_netpol_allow_access_to_google_namespaced_1="""\
+expected_netpol_allow_access_to_google_namespaced_1 = """\
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
 metadata:
@@ -379,6 +379,6 @@ class TestBaselineRulesToGlobalNetPols(unittest.TestCase):
                 self.assertTrue(compare_strings(expected_p1, p1))
                 self.assertTrue(compare_strings(expected_p2, p2))
 
+
 if __name__ == '__main__':
     unittest.main()
-

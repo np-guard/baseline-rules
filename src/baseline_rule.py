@@ -12,7 +12,7 @@ import base64
 from urllib import request
 from urllib.error import HTTPError
 import yaml
-from selector import Selector, IpSelector
+from selector import Selector, SelectorOp, IpSelector
 
 
 class BaselineRuleAction(Enum):
