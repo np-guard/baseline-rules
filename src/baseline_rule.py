@@ -6,21 +6,13 @@
 """
 A module for storing and querying baseline rules
 """
-from enum import Enum
 import json
 import base64
+import string
 from urllib import request
 from urllib.error import HTTPError
 import yaml
-from selector import Selector, SelectorOp, IpSelector
-
-
-class BaselineRuleAction(Enum):
-    """
-    Allowed actions for a baseline rule
-    """
-    deny = 0
-    allow = 1
+from selector import Selector, IpSelector
 
 
 class BaselineRule:
@@ -32,7 +24,7 @@ class BaselineRule:
         self.name = rule_record.get('name', '<no name>')
         print(f'processing rule {self.name}')
         self.description = rule_record.get('description', '')
-        self.action = BaselineRuleAction[rule_record.get('action', 'allow')]
+        self.action = rule_record.get('action', 'allow')
         self.source = Selector.parse_selectors(rule_record.get('from', ''))
         self.target = Selector.parse_selectors(rule_record.get('to', ''))
         self.source_ns = Selector.parse_selectors(rule_record.get('from_ns', ''))
@@ -40,19 +32,36 @@ class BaselineRule:
         self.protocol = rule_record.get('protocol')
         self.port_min = rule_record.get('port_min')
         self.port_max = rule_record.get('port_max')
+        self.check_entries_validation()
 
-    def matches_connection(self, source_labels, target_labels, port_list):
+    def check_entries_validation(self):
+        if isinstance(self.source_ns, IpSelector) or isinstance(self.target_ns, IpSelector):
+            raise Exception('A namespaceSelector can not be specified in CIDR notation', self.name)
+        if isinstance(self.source, IpSelector) and self.source_ns:
+            raise Exception('A source namespaceSelector can not be defined '
+                            'when the source is specified in CIDR notation', self.source)
+        if isinstance(self.target, IpSelector) and self.target_ns:
+            raise Exception('A target NamespaceSelector can not be defined '
+                            'when the target is specified in CIDR notation', self.target)
+
+    def matches_connection(self, source_labels, target_labels, port_list, source_ns_labels=None, target_ns_labels=None):
         """
         Check whether this rule matches a given connection (and therefore allows/denies it)
         :param dict source_labels: The label of the source deployment
         :param dict target_labels: The labels of the target deployment
         :param list port_list: A list of ports on which connections should be made
+        :param dict source_ns_labels: The label of the source deployment's namespace
+        :param dict target_ns_labels: The labels of the target deployment's namespace
         :return: Whether the rule matched the connection
         :rtype: bool
         """
         if not self.matches_source(source_labels):
             return False
         if not self.matches_target(target_labels):
+            return False
+        if not self.matches_source_namespace(source_ns_labels):
+            return False
+        if not self.matches_target_namespace(target_ns_labels):
             return False
 
         for port in port_list:
@@ -90,25 +99,27 @@ class BaselineRule:
         """
         return BaselineRule._matches_selectors(labels, self.target)
 
-    @staticmethod
-    def selectors_as_netpol_peer(selectors, ns_selector=False):
-        if not selectors:
-            if ns_selector:
-                # undefined refers to all, in k8s, existing but empty namespaceSelector matches all namespaces
-                return {'namespaceSelector': {}}
-            return {}
-        if isinstance(selectors, IpSelector):
-            if ns_selector:
-                print('Error: namespaceSelector might not be a CIDR')
-                return None
-            return {'ipBlock': selectors.get_cidr()}
-        if all(len(selector.values) == 1 and selector.operator == SelectorOp.IN for selector in selectors):
-            sel = {'matchLabels': {selector.key: selector.values[0] for selector in selectors}}
-        else:
-            sel = {'matchExpressions': [selector.convert_to_label_selector_requirement() for selector in selectors]}
-        if ns_selector:
-            return {'namespaceSelector': sel}
-        return {'podSelector': sel}
+    def matches_source_namespace(self, labels):
+        """
+        Check whether the given set of labels match the rule source's namespace
+        :param dict labels: The labels to match
+        :return: True if the labels match the rule source's namespace. False otherwise
+        :rtype: bool
+        """
+        if not labels:
+            return True
+        return BaselineRule._matches_selectors(labels, self.source_ns)
+
+    def matches_target_namespace(self, labels):
+        """
+        Check whether the given set of labels match the rule target's namespace
+        :param dict labels: The labels to match
+        :return: True if the labels match the rule target's namespace. False otherwise
+        :rtype: bool
+        """
+        if not labels:
+            return True
+        return BaselineRule._matches_selectors(labels, self.target_ns)
 
     @staticmethod
     def _selectors_as_netpol_peer_calico(selectors, limit_to_all_expr=True, ns_selector=False):
@@ -123,34 +134,12 @@ class BaselineRule:
                 return {}  # undefined namespaceSelector is equal to {'namespaceSelector': 'all()'}
             return {'selector': 'all()'} if limit_to_all_expr else {}
         if isinstance(selectors, IpSelector):
-            if ns_selector:
-                print('Error: namespaceSelector might not be a CIDR')
-                return None
             return {'nets': selectors.get_nets_calico()}
 
         expr = ' && '.join(selector.convert_to_calico_selector_expression() for selector in selectors)
         if ns_selector:
             return {'namespaceSelector': expr}
         return {'selector': expr}
-
-    def _get_namespace_name_from_selector(self, sel):
-        k8s_ns_label = 'kubernetes.io/metadata.name'
-        selector_dict = self.selectors_as_netpol_peer(sel, True)
-        return selector_dict['namespaceSelector']['matchLabels'].get(k8s_ns_label) or None
-
-    def sources_as_netpol_peer(self):
-        """
-        :return: the source field as a k8s NetworkPolicyPeer record
-        :rtype: dict
-        """
-        return self.selectors_as_netpol_peer(self.source)
-
-    def targets_as_netpol_peer(self):
-        """
-        :return: the target field as a k8s NetworkPolicyPeer record
-        :rtype: dict
-        """
-        return self.selectors_as_netpol_peer(self.target)
 
     def get_port_array(self):
         """
@@ -181,34 +170,29 @@ class BaselineRule:
             ports_array = [f'{self.port_min}:{self.port_max}']
         return ports_array
 
-    def _get_k8s_peer_selectors(self, sel, ns_sel):
-        peer_selectors = self.selectors_as_netpol_peer(sel)
-        if not isinstance(sel, IpSelector):
-            peer_ns_selector = self.selectors_as_netpol_peer(ns_sel, ns_selector=True)
-            peer_selectors.update(peer_ns_selector)
-        return peer_selectors
-
     def _get_entity_rule_selectors_calico(self, sel, ns_sel, limit_to_all_expr=True):
         entity_dict = self._selectors_as_netpol_peer_calico(sel, limit_to_all_expr=limit_to_all_expr)
-        if not isinstance(sel, IpSelector):
-            entity_ns = self._selectors_as_netpol_peer_calico(ns_sel, ns_selector=True)
-            entity_dict.update(entity_ns)
+        entity_ns = self._selectors_as_netpol_peer_calico(ns_sel, ns_selector=True)
+        entity_dict.update(entity_ns)
         return entity_dict
 
     def _get_calico_policy_spec_second_direction(self, is_ingress):
         policy_spec = {'types': ['Ingress']} if is_ingress else {'types': ['Egress']}
+        rule_dict = {'action': string.capwords(self.action)}
+        if self.protocol:
+            rule_dict['protocol'] = self.protocol
         if is_ingress:
             policy_selector = self._selectors_as_netpol_peer_calico(self.target)
             policy_ns_selector = self._selectors_as_netpol_peer_calico(self.target_ns, ns_selector=True)
             src_dict = self._get_entity_rule_selectors_calico(self.source, self.source_ns)
-            rule_dict = {'action': 'Allow',
-                         'source': src_dict}
+            if src_dict:
+                rule_dict['source'] = src_dict
         else:
             policy_selector = self._selectors_as_netpol_peer_calico(self.source)
             policy_ns_selector = self._selectors_as_netpol_peer_calico(self.source_ns, ns_selector=True)
             target_dict = self._get_entity_rule_selectors_calico(self.target, self.target_ns)
-            rule_dict = {'action': 'Allow',
-                         'destination': target_dict}
+            if target_dict:
+                rule_dict['destination'] = target_dict
 
         policy_spec.update(policy_selector)
         policy_spec.update(policy_ns_selector)
@@ -252,7 +236,7 @@ class BaselineRule:
         ports_list = self.get_port_array_calico()
         ports_dict = {'ports': ports_list}
 
-        rule_to_add = {'action': 'Allow'}
+        rule_to_add = {'action': string.capwords(self.action)}
         if self.protocol:
             rule_to_add['protocol'] = self.protocol
         if is_ingress_policy:
@@ -278,45 +262,6 @@ class BaselineRule:
         second_policy = self._get_calico_policy_dict(second_policy_spec, f'{self.name}-second-direction')
         policies_list.append(second_policy)
         return policies_list
-
-    def to_netpol(self):
-        """
-        :return: A k8s NetworkPolicy resource representing the connections specified by the rule
-        :rtype: dict
-        """
-        is_ingress_policy, policy_type = self._get_policy_type()
-        metadata = {'name': self.name}
-        policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or {
-            'podSelector': {}}
-
-        policy_spec = {
-            'policyTypes': [policy_type]
-        }
-        policy_spec.update(policy_selector)
-        rule_to_add = {'ports': self.get_port_array()}
-        if is_ingress_policy:
-            target_namespace = self._get_namespace_name_from_selector(self.target_ns)
-            if target_namespace:  # should always be true for k8s namespaced policy
-                metadata['namespace'] = target_namespace
-            from_selectors = self._get_k8s_peer_selectors(self.source, self.source_ns)
-            if from_selectors:
-                rule_to_add.update({'from': [from_selectors]})
-            policy_spec['ingress'] = [rule_to_add]
-        else:
-            source_namespace = self._get_namespace_name_from_selector(self.source_ns)
-            if source_namespace:  # should always be true for k8s namespaced policy
-                metadata['namespace'] = source_namespace
-            to_selectors = self._get_k8s_peer_selectors(self.target, self.target_ns)
-            if to_selectors:
-                rule_to_add.update({'to': [to_selectors]})
-            policy_spec['egress'] = [rule_to_add]
-
-        return {
-            'apiVersion': 'networking.k8s.io/v1',
-            'kind': 'NetworkPolicy',
-            'metadata': metadata,
-            'spec': policy_spec
-        }
 
 
 class BaselineRules(list):

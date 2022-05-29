@@ -22,6 +22,23 @@ spec:
       - 172.217.0.0/16
 """
 
+expected_netpol_allow_access_to_google_namespaced_1="""\
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: allow-access-to-google
+spec:
+  types:
+  - Egress
+  selector: app in {'adservice'}
+  namespaceSelector: kubernetes.io/metadata.name in {'default'}
+  egress:
+  - action: Allow
+    destination:
+      nets:
+      - 172.217.0.0/16
+"""
+
 expected_netpol_allow_https_egress_1 = """\
 apiVersion: projectcalico.org/v3
 kind: GlobalNetworkPolicy
@@ -71,6 +88,7 @@ spec:
   selector: app in {'loadgenerator'}
   egress:
   - action: Allow
+    protocol: TCP
     destination:
       selector: app not in {'paymentservice'}
 """
@@ -85,7 +103,7 @@ spec:
   - Ingress
   selector: app in {'paymentservice'}
   ingress:
-  - action: Allow
+  - action: Deny
     source:
       selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
 """
@@ -100,7 +118,7 @@ spec:
   - Egress
   selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
   egress:
-  - action: Allow
+  - action: Deny
     destination:
       selector: app in {'paymentservice'}
 """
@@ -115,7 +133,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Allow
+  - action: Deny
     protocol: TCP
     source: {}
     destination:
@@ -133,7 +151,8 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Allow
+  - action: Deny
+    protocol: TCP
     destination:
       selector: all()
 """
@@ -148,7 +167,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Allow
+  - action: Deny
     protocol: TCP
     source: {}
     destination:
@@ -166,7 +185,8 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Allow
+  - action: Deny
+    protocol: TCP
     destination:
       selector: all()
 """
@@ -181,7 +201,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Allow
+  - action: Deny
     protocol: TCP
     source: {}
     destination:
@@ -199,7 +219,8 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Allow
+  - action: Deny
+    protocol: TCP
     destination:
       selector: all()
 """
@@ -214,7 +235,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Allow
+  - action: Deny
     protocol: TCP
     source: {}
     destination:
@@ -232,13 +253,85 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Allow
+  - action: Deny
+    protocol: TCP
     destination:
       selector: all()
 """
 
+expected_netpol_deny_circle_blue_1 = """\
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-circle-blue
+spec:
+  types:
+  - Ingress
+  selector: color in {'red'}
+  namespaceSelector: shape not in {'circle'}
+  ingress:
+  - action: Deny
+    protocol: TCP
+    source:
+      selector: color in {'blue'}
+      namespaceSelector: shape in {'circle'}
+"""
+
+expected_netpol_deny_circle_blue_2 = """\
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: deny-circle-blue-second-direction
+spec:
+  types:
+  - Egress
+  selector: color in {'blue'}
+  namespaceSelector: shape in {'circle'}
+  egress:
+  - action: Deny
+    protocol: TCP
+    destination:
+      selector: color in {'red'}
+      namespaceSelector: shape not in {'circle'}
+"""
+
+expected_netpol_restrict_access_to_payment_namespaced_1 = """\
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: require-label-to-access-payments-service
+spec:
+  types:
+  - Ingress
+  selector: app in {'paymentservice'}
+  namespaceSelector: environment in {'admin', 'prod'}
+  ingress:
+  - action: Deny
+    source:
+      selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
+      namespaceSelector: has(controller-id) && run-level not in {'0', '1'}
+"""
+
+expected_netpol_restrict_access_to_payment_namespaced_2 = """\
+apiVersion: projectcalico.org/v3
+kind: GlobalNetworkPolicy
+metadata:
+  name: require-label-to-access-payments-service-second-direction
+spec:
+  types:
+  - Egress
+  selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
+  namespaceSelector: has(controller-id) && run-level not in {'0', '1'}
+  egress:
+  - action: Deny
+    destination:
+      selector: app in {'paymentservice'}
+      namespaceSelector: environment in {'admin', 'prod'}
+"""
+
 rules_dict = dict()
 rules_dict['allow_access_to_google'] = [(expected_netpol_allow_access_to_google_1, None)]
+rules_dict['allow_access_to_google_namespaced'] = [(expected_netpol_allow_access_to_google_namespaced_1, None)]
 rules_dict['allow_https_egress'] = [(expected_netpol_allow_https_egress_1, None)]
 rules_dict['allow_load_generation'] = [
     (expected_netpol_allow_load_generation_1, expected_netpol_allow_load_generation_2)]
@@ -249,6 +342,9 @@ rules_dict['ciso_denied_ports'] = [
     (expected_netpol_ciso_denied_ports_no_telnet_1, expected_netpol_ciso_denied_ports_no_telnet_2),
     (expected_netpol_ciso_denied_ports_no_smtp_1, expected_netpol_ciso_denied_ports_no_smtp_2),
     (expected_netpol_ciso_denied_ports_no_imap_1, expected_netpol_ciso_denied_ports_no_imap_2)]
+rules_dict['deny_circle_blue'] = [(expected_netpol_deny_circle_blue_1, expected_netpol_deny_circle_blue_2)]
+rules_dict['restrict_access_to_payment_namespaced'] = [
+    (expected_netpol_restrict_access_to_payment_namespaced_1, expected_netpol_restrict_access_to_payment_namespaced_2)]
 
 
 def compare_strings(expected, actual):

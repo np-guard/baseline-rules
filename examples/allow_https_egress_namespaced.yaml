@@ -1,9 +1,0 @@
-- name: allow-https
-  description: Allow https connections to outside of the cluster
-  from: app=account-query-selector
-  from_ns: kubernetes.io/metadata.name=default
-  to: 0.0.0.0/0
-  protocol: TCP
-  port_min: 443
-  port_max: 443
-  action: allow
