@@ -88,7 +88,6 @@ spec:
   selector: app in {'loadgenerator'}
   egress:
   - action: Allow
-    protocol: TCP
     destination:
       selector: app not in {'paymentservice'}
 """
@@ -103,7 +102,7 @@ spec:
   - Ingress
   selector: app in {'paymentservice'}
   ingress:
-  - action: Deny
+  - action: Allow
     source:
       selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
 """
@@ -118,7 +117,7 @@ spec:
   - Egress
   selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
   egress:
-  - action: Deny
+  - action: Allow
     destination:
       selector: app in {'paymentservice'}
 """
@@ -133,7 +132,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Deny
+  - action: Allow
     protocol: TCP
     source: {}
     destination:
@@ -151,8 +150,7 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Deny
-    protocol: TCP
+  - action: Allow
     destination:
       selector: all()
 """
@@ -167,7 +165,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Deny
+  - action: Allow
     protocol: TCP
     source: {}
     destination:
@@ -185,8 +183,7 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Deny
-    protocol: TCP
+  - action: Allow
     destination:
       selector: all()
 """
@@ -201,7 +198,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Deny
+  - action: Allow
     protocol: TCP
     source: {}
     destination:
@@ -219,8 +216,7 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Deny
-    protocol: TCP
+  - action: Allow
     destination:
       selector: all()
 """
@@ -235,7 +231,7 @@ spec:
   - Ingress
   selector: all()
   ingress:
-  - action: Deny
+  - action: Allow
     protocol: TCP
     source: {}
     destination:
@@ -253,8 +249,7 @@ spec:
   - Egress
   selector: all()
   egress:
-  - action: Deny
-    protocol: TCP
+  - action: Allow
     destination:
       selector: all()
 """
@@ -270,7 +265,7 @@ spec:
   selector: color in {'red'}
   namespaceSelector: shape not in {'circle'}
   ingress:
-  - action: Deny
+  - action: Allow
     protocol: TCP
     source:
       selector: color in {'blue'}
@@ -288,8 +283,7 @@ spec:
   selector: color in {'blue'}
   namespaceSelector: shape in {'circle'}
   egress:
-  - action: Deny
-    protocol: TCP
+  - action: Allow
     destination:
       selector: color in {'red'}
       namespaceSelector: shape not in {'circle'}
@@ -306,7 +300,7 @@ spec:
   selector: app in {'paymentservice'}
   namespaceSelector: environment in {'admin', 'prod'}
   ingress:
-  - action: Deny
+  - action: Allow
     source:
       selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
       namespaceSelector: has(controller-id) && run-level not in {'0', '1'}
@@ -323,7 +317,7 @@ spec:
   selector: usesPayments not in {'true', 'True'} && stage not in {'dev'}
   namespaceSelector: has(controller-id) && run-level not in {'0', '1'}
   egress:
-  - action: Deny
+  - action: Allow
     destination:
       selector: app in {'paymentservice'}
       namespaceSelector: environment in {'admin', 'prod'}
