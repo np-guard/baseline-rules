@@ -6,13 +6,21 @@
 """
 A module for storing and querying baseline rules
 """
+from enum import Enum
 import json
 import base64
-import string
 from urllib import request
 from urllib.error import HTTPError
 import yaml
 from selector import Selector, IpSelector
+
+
+class BaselineRuleAction(Enum):
+    """
+    Allowed actions for a baseline rule
+    """
+    deny = 0
+    allow = 1
 
 
 class BaselineRule:
@@ -24,7 +32,7 @@ class BaselineRule:
         self.name = rule_record.get('name', '<no name>')
         print(f'processing rule {self.name}')
         self.description = rule_record.get('description', '')
-        self.action = rule_record.get('action', 'allow')
+        self.action = BaselineRuleAction[rule_record.get('action', 'allow')]
         self.source = Selector.parse_selectors(rule_record.get('from', ''))
         self.target = Selector.parse_selectors(rule_record.get('to', ''))
         self.source_ns = Selector.parse_selectors(rule_record.get('from_ns', ''))
@@ -190,21 +198,18 @@ class BaselineRule:
 
     def _get_calico_policy_spec_second_direction(self, is_ingress):
         policy_spec = {'types': ['Ingress']} if is_ingress else {'types': ['Egress']}
-        rule_dict = {'action': string.capwords(self.action)}
-        if self.protocol:
-            rule_dict['protocol'] = self.protocol
         if is_ingress:
             policy_selector = self._selectors_as_netpol_peer_calico(self.target)
             policy_ns_selector = self._selectors_as_netpol_peer_calico(self.target_ns, ns_selector=True)
             src_dict = self._get_entity_rule_selectors_calico(self.source, self.source_ns)
-            if src_dict:
-                rule_dict['source'] = src_dict
+            rule_dict = {'action': 'Allow',
+                         'source': src_dict}
         else:
             policy_selector = self._selectors_as_netpol_peer_calico(self.source)
             policy_ns_selector = self._selectors_as_netpol_peer_calico(self.source_ns, ns_selector=True)
             target_dict = self._get_entity_rule_selectors_calico(self.target, self.target_ns)
-            if target_dict:
-                rule_dict['destination'] = target_dict
+            rule_dict = {'action': 'Allow',
+                         'destination': target_dict}
 
         policy_spec.update(policy_selector)
         policy_spec.update(policy_ns_selector)
@@ -248,7 +253,7 @@ class BaselineRule:
         ports_list = self.get_port_array_calico()
         ports_dict = {'ports': ports_list}
 
-        rule_to_add = {'action': string.capwords(self.action)}
+        rule_to_add = {'action': 'Allow'}
         if self.protocol:
             rule_to_add['protocol'] = self.protocol
         if is_ingress_policy:
