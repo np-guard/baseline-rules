@@ -122,6 +122,18 @@ class BaselineRule:
         return BaselineRule._matches_selectors(labels, self.target_ns)
 
     @staticmethod
+    def selectors_as_netpol_peer(selectors):
+        if not selectors:
+            return {}
+        if isinstance(selectors, IpSelector):
+            return {'ipBlock': selectors.get_cidr()}
+        if all(len(selector.values) == 1 and selector.operator == SelectorOp.IN for selector in selectors):
+            sel = {'matchLabels': {selector.key: selector.values[0] for selector in selectors}}
+        else:
+            sel = {'matchExpressions': [selector.convert_to_label_selector_requirement() for selector in selectors]}
+        return {'podSelector': sel}
+
+    @staticmethod
     def _selectors_as_netpol_peer_calico(selectors, limit_to_all_expr=True, ns_selector=False):
         """
         :param Union(list[LabelSelector], IpSelector) selectors: the source or target selectors
