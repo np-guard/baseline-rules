@@ -146,6 +146,7 @@ class BaselineRule:
         """
         :param Union(list[LabelSelector], IpSelector) selectors: the source or target selectors
         :param bool limit_to_all_expr: should limit calico selector to 'all()' in case of empty input selectors
+        :param bool ns_selector: True when selectors refers to a namespaceSelector
         :return: calico selector dict
         :rtype dict
         """
