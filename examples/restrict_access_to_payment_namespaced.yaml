@@ -1,0 +1,7 @@
+- name: require-label-to-access-payments-service
+  description: Deny access to payment service if deployment does not have the usesPayments label set to true and doesn't match namespaces requirements
+  from: usesPayments notin (true, True), stage!=dev
+  from_ns: controller-id, run-level notin (0, 1)
+  to: app=paymentservice
+  to_ns: environment in (admin, prod)
+  action: deny

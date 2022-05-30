@@ -1,0 +1,8 @@
+- name: deny-circle-blue
+  description: deny ingress traffic from pods with color=blue pods in namespace with shape=circle if endpoints with color=red and in namespace with shape!=circle
+  protocol: TCP
+  from: color=blue
+  from_ns: shape=circle
+  to: color=red
+  to_ns: shape!=circle
+  action: deny

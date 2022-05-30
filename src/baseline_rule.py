@@ -35,22 +35,41 @@ class BaselineRule:
         self.action = BaselineRuleAction[rule_record.get('action', 'allow')]
         self.source = Selector.parse_selectors(rule_record.get('from', ''))
         self.target = Selector.parse_selectors(rule_record.get('to', ''))
+        self.source_ns = Selector.parse_selectors(rule_record.get('from_ns', ''))
+        self.target_ns = Selector.parse_selectors(rule_record.get('to_ns', ''))
         self.protocol = rule_record.get('protocol')
         self.port_min = rule_record.get('port_min')
         self.port_max = rule_record.get('port_max')
+        self.check_entries_validation()
 
-    def matches_connection(self, source_labels, target_labels, port_list):
+    def check_entries_validation(self):
+        if isinstance(self.source_ns, IpSelector) or isinstance(self.target_ns, IpSelector):
+            raise Exception('A namespaceSelector can not be specified in CIDR notation', self.name)
+        if isinstance(self.source, IpSelector) and self.source_ns:
+            raise Exception('A source namespaceSelector can not be defined '
+                            'when the source is specified in CIDR notation', self.source)
+        if isinstance(self.target, IpSelector) and self.target_ns:
+            raise Exception('A target NamespaceSelector can not be defined '
+                            'when the target is specified in CIDR notation', self.target)
+
+    def matches_connection(self, source_labels, target_labels, port_list, source_ns_labels=None, target_ns_labels=None):
         """
         Check whether this rule matches a given connection (and therefore allows/denies it)
         :param dict source_labels: The label of the source deployment
         :param dict target_labels: The labels of the target deployment
         :param list port_list: A list of ports on which connections should be made
+        :param dict source_ns_labels: The label of the source deployment's namespace
+        :param dict target_ns_labels: The labels of the target deployment's namespace
         :return: Whether the rule matched the connection
         :rtype: bool
         """
         if not self.matches_source(source_labels):
             return False
         if not self.matches_target(target_labels):
+            return False
+        if not self.matches_source_namespace(source_ns_labels):
+            return False
+        if not self.matches_target_namespace(target_ns_labels):
             return False
 
         for port in port_list:
@@ -88,6 +107,30 @@ class BaselineRule:
         """
         return BaselineRule._matches_selectors(labels, self.target)
 
+    def matches_source_namespace(self, labels):
+        """
+        Check whether the given set of labels match the rule source's namespace
+        NOTE: if no labels are provided, this is interpreted as "no namespace context", and the rule matches
+        :param dict labels: The labels to match
+        :return: True if the labels match the rule source's namespace. False otherwise
+        :rtype: bool
+        """
+        if not labels:
+            return True
+        return BaselineRule._matches_selectors(labels, self.source_ns)
+
+    def matches_target_namespace(self, labels):
+        """
+        Check whether the given set of labels match the rule target's namespace
+        NOTE: if no labels are provided, this is interpreted as "no namespace context", and the rule matches
+        :param dict labels: The labels to match
+        :return: True if the labels match the rule target's namespace. False otherwise
+        :rtype: bool
+        """
+        if not labels:
+            return True
+        return BaselineRule._matches_selectors(labels, self.target_ns)
+
     @staticmethod
     def selectors_as_netpol_peer(selectors):
         if not selectors:
@@ -101,34 +144,25 @@ class BaselineRule:
         return {'podSelector': sel}
 
     @staticmethod
-    def _selectors_as_netpol_peer_calico(selectors, limit_to_all_expr=True):
+    def _selectors_as_netpol_peer_calico(selectors, limit_to_all_expr=True, ns_selector=False):
         """
         :param Union(list[LabelSelector], IpSelector) selectors: the source or target selectors
         :param bool limit_to_all_expr: should limit calico selector to 'all()' in case of empty input selectors
+        :param bool ns_selector: True when selectors refers to a namespaceSelector
         :return: calico selector dict
         :rtype dict
         """
         if not selectors:
+            if ns_selector:
+                return {}  # undefined namespaceSelector is equal to {'namespaceSelector': 'all()'}
             return {'selector': 'all()'} if limit_to_all_expr else {}
         if isinstance(selectors, IpSelector):
             return {'nets': selectors.get_nets_calico()}
 
         expr = ' && '.join(selector.convert_to_calico_selector_expression() for selector in selectors)
+        if ns_selector:
+            return {'namespaceSelector': expr}
         return {'selector': expr}
-
-    def sources_as_netpol_peer(self):
-        """
-        :return: the source field as a k8s NetworkPolicyPeer record
-        :rtype: dict
-        """
-        return self.selectors_as_netpol_peer(self.source)
-
-    def targets_as_netpol_peer(self):
-        """
-        :return: the target field as a k8s NetworkPolicyPeer record
-        :rtype: dict
-        """
-        return self.selectors_as_netpol_peer(self.target)
 
     def get_port_array(self):
         """
@@ -159,18 +193,29 @@ class BaselineRule:
             ports_array = [f'{self.port_min}:{self.port_max}']
         return ports_array
 
+    def _get_entity_rule_selectors_calico(self, sel, ns_sel, limit_to_all_expr=True):
+        entity_dict = self._selectors_as_netpol_peer_calico(sel, limit_to_all_expr=limit_to_all_expr)
+        entity_ns = self._selectors_as_netpol_peer_calico(ns_sel, ns_selector=True)
+        entity_dict.update(entity_ns)
+        return entity_dict
+
     def _get_calico_policy_spec_second_direction(self, is_ingress):
         policy_spec = {'types': ['Ingress']} if is_ingress else {'types': ['Egress']}
         if is_ingress:
             policy_selector = self._selectors_as_netpol_peer_calico(self.target)
+            policy_ns_selector = self._selectors_as_netpol_peer_calico(self.target_ns, ns_selector=True)
+            src_dict = self._get_entity_rule_selectors_calico(self.source, self.source_ns)
             rule_dict = {'action': 'Allow',
-                         'source': self._selectors_as_netpol_peer_calico(self.source)}
+                         'source': src_dict}
         else:
             policy_selector = self._selectors_as_netpol_peer_calico(self.source)
+            policy_ns_selector = self._selectors_as_netpol_peer_calico(self.source_ns, ns_selector=True)
+            target_dict = self._get_entity_rule_selectors_calico(self.target, self.target_ns)
             rule_dict = {'action': 'Allow',
-                         'destination': self._selectors_as_netpol_peer_calico(self.target)}
+                         'destination': target_dict}
 
         policy_spec.update(policy_selector)
+        policy_spec.update(policy_ns_selector)
         rule_type = 'ingress' if is_ingress else 'egress'
         policy_spec.update({rule_type: [rule_dict]})
         return policy_spec
@@ -204,8 +249,10 @@ class BaselineRule:
         is_ingress_policy, policy_type = self._get_policy_type()
         policy_spec = {'types': [policy_type]}
         policy_selector = self._selectors_as_netpol_peer_calico(self.target if is_ingress_policy else self.source)
-
         policy_spec.update(policy_selector)
+        policy_ns_selector = self._selectors_as_netpol_peer_calico(self.target_ns if is_ingress_policy
+                                                                   else self.source_ns, ns_selector=True)
+        policy_spec.update(policy_ns_selector)
         ports_list = self.get_port_array_calico()
         ports_dict = {'ports': ports_list}
 
@@ -213,13 +260,13 @@ class BaselineRule:
         if self.protocol:
             rule_to_add['protocol'] = self.protocol
         if is_ingress_policy:
-            src_dict = self._selectors_as_netpol_peer_calico(self.source, False)
+            src_dict = self._get_entity_rule_selectors_calico(self.source, self.source_ns, False)
             rule_to_add['source'] = src_dict
             if ports_list:
                 rule_to_add['destination'] = ports_dict
             policy_spec['ingress'] = [rule_to_add]
         else:
-            dst_dict = self._selectors_as_netpol_peer_calico(self.target, False)
+            dst_dict = self._get_entity_rule_selectors_calico(self.target, self.target_ns, False)
             if ports_list:
                 dst_dict.update(ports_dict)
             rule_to_add['destination'] = dst_dict
@@ -235,39 +282,6 @@ class BaselineRule:
         second_policy = self._get_calico_policy_dict(second_policy_spec, f'{self.name}-second-direction')
         policies_list.append(second_policy)
         return policies_list
-
-    # TODO: currently generates policy in default namespace, should be used for baseline rules with namespaces
-    def to_netpol(self):
-        """
-        :return: A k8s NetworkPolicy resource representing the connections specified by the rule
-        :rtype: dict
-        """
-        is_ingress_policy, policy_type = self._get_policy_type()
-        policy_selector = self.selectors_as_netpol_peer(self.target if is_ingress_policy else self.source) or {
-            'podSelector': {}}
-
-        policy_spec = {
-            'policyTypes': [policy_type]
-        }
-        policy_spec.update(policy_selector)
-        rule_to_add = {'ports': self.get_port_array()}
-        if is_ingress_policy:
-            from_selector = self.selectors_as_netpol_peer(self.source)
-            if from_selector:
-                rule_to_add.update({'from': [from_selector]})
-            policy_spec['ingress'] = [rule_to_add]
-        else:
-            to_selector = self.selectors_as_netpol_peer(self.target)
-            if to_selector:
-                rule_to_add.update({'to': [to_selector]})
-            policy_spec['egress'] = [rule_to_add]
-
-        return {
-            'apiVersion': 'networking.k8s.io/v1',
-            'kind': 'NetworkPolicy',
-            'metadata': {'name': self.name},
-            'spec': policy_spec
-        }
 
 
 class BaselineRules(list):
