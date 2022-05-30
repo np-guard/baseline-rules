@@ -110,6 +110,7 @@ class BaselineRule:
     def matches_source_namespace(self, labels):
         """
         Check whether the given set of labels match the rule source's namespace
+        NOTE: if no labels are provided, this is interpreted as "no namespace context", and the rule matches
         :param dict labels: The labels to match
         :return: True if the labels match the rule source's namespace. False otherwise
         :rtype: bool
