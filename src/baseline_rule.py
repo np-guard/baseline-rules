@@ -122,6 +122,7 @@ class BaselineRule:
     def matches_target_namespace(self, labels):
         """
         Check whether the given set of labels match the rule target's namespace
+        NOTE: if no labels are provided, this is interpreted as "no namespace context", and the rule matches
         :param dict labels: The labels to match
         :return: True if the labels match the rule target's namespace. False otherwise
         :rtype: bool
