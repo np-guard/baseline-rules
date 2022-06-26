@@ -13,6 +13,7 @@ from urllib import request
 from urllib.error import HTTPError
 import yaml
 from selector import Selector, SelectorOp, IpSelector
+from basline_rule_syntax_checker import RuleSyntaxChecker
 
 
 class BaselineRuleAction(Enum):
@@ -29,22 +30,23 @@ class BaselineRule:
     """
 
     def __init__(self, rule_record):
-        self.name = rule_record.get('name', '<no name>')
-        print(f'processing rule {self.name}')
+        syntax_checker = RuleSyntaxChecker()
+        syntax_checker.check_keys_legality(rule_record)
+        self.name = syntax_checker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
         self.description = rule_record.get('description', '')
-        self.action = BaselineRuleAction[rule_record.get('action', 'allow')]
-        self.source = Selector.parse_selectors(rule_record.get('from', ''))
-        self.target = Selector.parse_selectors(rule_record.get('to', ''))
-        self.source_ns = Selector.parse_selectors(rule_record.get('from_ns', ''))
-        self.target_ns = Selector.parse_selectors(rule_record.get('to_ns', ''))
-        self.protocol = rule_record.get('protocol')
-        self.port_min = rule_record.get('port_min')
-        self.port_max = rule_record.get('port_max')
-        self.check_entries_validation()
+        self.action = BaselineRuleAction[syntax_checker.check_action_validity(rule_record.get('action', 'allow'))]
+        self.source = syntax_checker.check_selector_validity(Selector.parse_selectors(rule_record.get('from', '')))
+        self.target = syntax_checker.check_selector_validity(Selector.parse_selectors(rule_record.get('to', '')))
+        self.source_ns = \
+            syntax_checker.check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('from_ns', '')))
+        self.target_ns = \
+            syntax_checker.check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('to_ns', '')))
+        self.protocol = syntax_checker.check_protocol_validity(rule_record.get('protocol'))
+        self.port_min = syntax_checker.check_port_validity(rule_record.get('port_min'))
+        self.port_max = syntax_checker.check_port_validity(rule_record.get('port_max'))
+        self.check_selectors_entries_combinations()
 
-    def check_entries_validation(self):
-        if isinstance(self.source_ns, IpSelector) or isinstance(self.target_ns, IpSelector):
-            raise Exception('A namespaceSelector can not be specified in CIDR notation', self.name)
+    def check_selectors_entries_combinations(self):
         if isinstance(self.source, IpSelector) and self.source_ns:
             raise Exception('A source namespaceSelector can not be defined '
                             'when the source is specified in CIDR notation', self.source)
