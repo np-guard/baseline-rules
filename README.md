@@ -12,7 +12,7 @@ A baseline-rule file is a YAML file containing a list of Rule objects, and each 
 |from_ns    |Source Namespaces. a [K8s set-based requirement](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#set-based-requirement)|string|`null` (all source namespaces)|
 |to_ns    |Destination Namespaces. a [K8s set-based requirement](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#set-based-requirement)|string|`null` (all destination namespaces)|
 |protocol   |Connections protocol. Must be [supported by K8s](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.21/#networkpolicyport-v1-networking-k8s-io).|string|`null` (all protocols)|
-|port_min   |Minimal connections port. Must be in range of [1, 65535]|int|`null` (no minimal port)|
-|port_max   |Maximal connections port. Must be in range of [1, 65535]|int|`null` (no maximal port)|
+|port_min   |Minimal connections port. Must be in range [1, 65535]|int|`null` (no minimal port)|
+|port_max   |Maximal connections port. Must be in range [1, 65535]|int|`null` (no maximal port)|
 
 Examples are available in the [examples directory](https://github.com/np-guard/baseline-rules/tree/master/examples).
