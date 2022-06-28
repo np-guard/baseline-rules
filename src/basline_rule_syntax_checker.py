@@ -45,7 +45,7 @@ class RuleSyntaxChecker:
         if not isinstance(port_num, int):
             raise Exception(f'Invalid {port_num}. A port must be numerical', self.rule_name)
         if port_num not in range(1, 65536):
-            raise Exception(f'Invalid {port_num}. A port must be in the range of [1, 65535]', self.rule_name)
+            raise Exception(f'Invalid {port_num}. A port must be in the range [1, 65535]', self.rule_name)
 
         return port_num
 
