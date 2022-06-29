@@ -33,6 +33,8 @@ class BaselineRule:
         self.name = rule_record.get('name', 'no-name')
         self.description = rule_record.get('description', '')
         try:
+            RuleSyntaxChecker.check_keys_legality(rule_record)
+            RuleSyntaxChecker.check_dns_subdomain_name(self.name)
             self.action = \
                 BaselineRuleAction[RuleSyntaxChecker.check_action_validity(rule_record.get('action', 'allow'))]
             self.source = \
