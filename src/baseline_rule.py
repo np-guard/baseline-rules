@@ -30,8 +30,7 @@ class BaselineRule:
     """
 
     def __init__(self, rule_record):
-        RuleSyntaxChecker.check_keys_legality(rule_record)
-        self.name = RuleSyntaxChecker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
+        self.name = rule_record.get('name', 'no-name')
         self.description = rule_record.get('description', '')
         try:
             self.action = \
