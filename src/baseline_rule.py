@@ -30,20 +30,28 @@ class BaselineRule:
     """
 
     def __init__(self, rule_record):
-        syntax_checker = RuleSyntaxChecker()
-        syntax_checker.check_keys_legality(rule_record)
-        self.name = syntax_checker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
-        self.description = rule_record.get('description', '')
-        self.action = BaselineRuleAction[syntax_checker.check_action_validity(rule_record.get('action', 'allow'))]
-        self.source = syntax_checker.check_selector_validity(Selector.parse_selectors(rule_record.get('from', '')))
-        self.target = syntax_checker.check_selector_validity(Selector.parse_selectors(rule_record.get('to', '')))
-        self.source_ns = \
-            syntax_checker.check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('from_ns', '')))
-        self.target_ns = \
-            syntax_checker.check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('to_ns', '')))
-        self.protocol = syntax_checker.check_protocol_validity(rule_record.get('protocol'))
-        self.port_min = syntax_checker.check_port_validity(rule_record.get('port_min'))
-        self.port_max = syntax_checker.check_port_validity(rule_record.get('port_max'))
+        try:
+            RuleSyntaxChecker.check_keys_legality(rule_record)
+            self.name = RuleSyntaxChecker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
+            self.description = rule_record.get('description', '')
+            self.action = \
+                BaselineRuleAction[RuleSyntaxChecker.check_action_validity(rule_record.get('action', 'allow'))]
+            self.source = \
+                RuleSyntaxChecker.check_selector_validity(Selector.parse_selectors(rule_record.get('from', '')))
+            self.target = RuleSyntaxChecker.check_selector_validity(Selector.parse_selectors(rule_record.get('to', '')))
+            self.source_ns = RuleSyntaxChecker.\
+                check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('from_ns', '')))
+            self.target_ns = RuleSyntaxChecker.\
+                check_namespace_selector_validity(Selector.parse_selectors(rule_record.get('to_ns', '')))
+            self.protocol = RuleSyntaxChecker.check_protocol_validity(rule_record.get('protocol'))
+            self.port_min = RuleSyntaxChecker.check_port_validity(rule_record.get('port_min'))
+            self.port_max = RuleSyntaxChecker.check_port_validity(rule_record.get('port_max'))
+        except Exception as e:
+            if self.name:
+                print(f'{self.name} : {e}')
+            else:
+                print(e)
+
         self.check_selectors_entries_combinations()
 
     def check_selectors_entries_combinations(self):
