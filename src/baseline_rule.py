@@ -30,10 +30,10 @@ class BaselineRule:
     """
 
     def __init__(self, rule_record):
+        RuleSyntaxChecker.check_keys_legality(rule_record)
+        self.name = RuleSyntaxChecker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
+        self.description = rule_record.get('description', '')
         try:
-            RuleSyntaxChecker.check_keys_legality(rule_record)
-            self.name = RuleSyntaxChecker.check_dns_subdomain_name(rule_record.get('name', 'no-name'))
-            self.description = rule_record.get('description', '')
             self.action = \
                 BaselineRuleAction[RuleSyntaxChecker.check_action_validity(rule_record.get('action', 'allow'))]
             self.source = \
@@ -48,9 +48,9 @@ class BaselineRule:
             self.port_max = RuleSyntaxChecker.check_port_validity(rule_record.get('port_max'))
         except Exception as e:
             if self.name:
-                print(f'{self.name} : {e}')
+                raise Exception(f'{self.name} : {e}') from None
             else:
-                print(e)
+                raise Exception(e) from None
 
         self.check_selectors_entries_combinations()
 
