@@ -46,10 +46,9 @@ class BaselineRule:
             self.protocol = RuleSyntaxChecker.check_protocol_validity(rule_record.get('protocol'))
             self.port_min = RuleSyntaxChecker.check_port_validity(rule_record.get('port_min'))
             self.port_max = RuleSyntaxChecker.check_port_validity(rule_record.get('port_max'))
+            self.check_selectors_entries_combinations()
         except Exception as e:
             raise Exception(f'{self.name} : {e}') from None
-
-        self.check_selectors_entries_combinations()
 
     def check_selectors_entries_combinations(self):
         if isinstance(self.source, IpSelector) and self.source_ns:
