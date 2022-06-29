@@ -47,10 +47,7 @@ class BaselineRule:
             self.port_min = RuleSyntaxChecker.check_port_validity(rule_record.get('port_min'))
             self.port_max = RuleSyntaxChecker.check_port_validity(rule_record.get('port_max'))
         except Exception as e:
-            if self.name:
-                raise Exception(f'{self.name} : {e}') from None
-            else:
-                raise Exception(e) from None
+            raise Exception(f'{self.name} : {e}') from None
 
         self.check_selectors_entries_combinations()
 
